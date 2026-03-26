@@ -68,11 +68,39 @@ screen_section = { screen_header ~ line_ending ~ (screen_entry ~ line_ending?)* 
 data_division_header = { "DATA" ~ "DIVISION" ~ dot }
 data_division = { data_division_header ~ line_ending ~ working_storage? ~ screen_section? }
 
-// PROCEDURE DIVISION (minimal: just capture paragraph names)
+// Expressions used in statements
+expr = { quoted_string | digits | ident }
+
+// COBOL statements (dot is optional inside compound statements like IF)
+move_stmt     = { "MOVE" ~ expr ~ "TO" ~ ident ~ dot? }
+add_stmt      = { "ADD" ~ expr ~ "TO" ~ ident ~ dot? }
+subtract_stmt = { "SUBTRACT" ~ expr ~ "FROM" ~ ident ~ dot? }
+multiply_stmt = { "MULTIPLY" ~ expr ~ "BY" ~ ident ~ dot? }
+divide_stmt   = { "DIVIDE" ~ expr ~ "INTO" ~ ident ~ dot? }
+display_stmt  = { "DISPLAY" ~ expr+ ~ dot? }
+perform_stmt  = { "PERFORM" ~ ident ~ dot? }
+stop_stmt     = { "STOP" ~ "RUN" ~ dot? }
+
+// Comparison operators
+compare_op = { ">=" | "<=" | ">" | "<" | "NOT" ~ "=" | "=" }
+
+// IF statement
+condition    = { expr ~ compare_op ~ expr }
+if_stmt      = { "IF" ~ condition ~ "THEN"? ~ line_ending? ~ statement* ~ else_clause? ~ line_ending? ~ "END-IF" ~ dot? }
+else_clause  = { "ELSE" ~ line_ending? ~ statement* }
+
+// STRING statement
+string_delim  = { "SIZE" | "SPACE" | "SPACES" | quoted_string }
+string_source = { expr ~ "DELIMITED" ~ "BY" ~ string_delim }
+string_stmt   = { "STRING" ~ (string_source ~ line_ending?)+ ~ "INTO" ~ ident ~ dot }
+
+// Any statement
+statement = { (move_stmt | add_stmt | subtract_stmt | multiply_stmt | divide_stmt | display_stmt | perform_stmt | stop_stmt | if_stmt | string_stmt) ~ line_ending? }
+
+// PROCEDURE DIVISION
 procedure_division_header = { "PROCEDURE" ~ "DIVISION" ~ dot }
 paragraph_name = { ident ~ dot }
-paragraph_body = { (!paragraph_name ~ !procedure_division_header ~ ANY)* }
-paragraph = { paragraph_name ~ paragraph_body }
+paragraph = { paragraph_name ~ line_ending? ~ statement* }
 procedure_division = { procedure_division_header ~ line_ending ~ paragraph* }
 
 // IDENTIFICATION DIVISION (minimal)
