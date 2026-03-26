@@ -1,0 +1,91 @@
+// COBALT COBOL Subset Grammar
+// Parses DATA DIVISION (WORKING-STORAGE + SCREEN SECTION) and
+// minimal PROCEDURE DIVISION for event handler references.
+
+WHITESPACE = _{ " " | "\t" }
+COMMENT    = _{ ("*>" ~ (!NEWLINE ~ ANY)*) }
+
+// Primitives
+NEWLINE      = _{ "\r\n" | "\n" }
+line_ending  =  { NEWLINE+ }
+dot          = _{ "." }
+
+// Identifiers: COBOL data names (letters, digits, hyphens)
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "-")* }
+
+// Numbers
+digits = @{ ASCII_DIGIT+ }
+
+// Quoted string
+quoted_string = @{ "\"" ~ inner_string ~ "\"" }
+inner_string  = @{ (!"\"" ~ ANY)* }
+
+// Level numbers
+level_number = @{ ASCII_DIGIT{1,2} }
+
+// PIC clause: PIC X(30), PIC 9(5)V9(2), PIC A(10), PIC X, PIC 9
+pic_kind   = { "X" | "9" | "A" }
+pic_width  = { "(" ~ digits ~ ")" }
+pic_decimal = { "V" ~ "9" ~ pic_width? }
+pic_clause = { ("PIC" | "PICTURE") ~ "IS"? ~ pic_kind ~ pic_width? ~ pic_decimal? }
+
+// VALUE clause
+value_clause = { "VALUE" ~ "IS"? ~ (quoted_string | digits) }
+
+// USING clause (two-way data binding)
+using_clause = { "USING" ~ ident }
+
+// ON-ACTION clause (event handler)
+on_action_clause = { "ON-ACTION" ~ "PERFORM" ~ ident }
+
+// Color clauses
+bg_color_clause = { "BACKGROUND-COLOR" ~ "IS"? ~ digits }
+fg_color_clause = { "FOREGROUND-COLOR" ~ "IS"? ~ digits }
+
+// Level-88 condition name
+level_88 = { "88" ~ ident ~ "VALUE" ~ "IS"? ~ (quoted_string | digits) ~ dot }
+
+// A single clause (any of the above)
+clause = { pic_clause | value_clause | using_clause | on_action_clause | bg_color_clause | fg_color_clause }
+
+// A data entry: level number, name, clauses, period
+data_entry = { level_number ~ ident ~ clause* ~ dot }
+
+// WORKING-STORAGE SECTION
+working_storage_header = { "WORKING-STORAGE" ~ "SECTION" ~ dot }
+working_storage_entry  = { data_entry | level_88 }
+working_storage        = { working_storage_header ~ line_ending ~ (working_storage_entry ~ line_ending?)* }
+
+// SCREEN SECTION
+screen_header = { "SCREEN" ~ "SECTION" ~ dot }
+screen_entry  = { data_entry }
+screen_section = { screen_header ~ line_ending ~ (screen_entry ~ line_ending?)* }
+
+// DATA DIVISION
+data_division_header = { "DATA" ~ "DIVISION" ~ dot }
+data_division = { data_division_header ~ line_ending ~ working_storage? ~ screen_section? }
+
+// PROCEDURE DIVISION (minimal: just capture paragraph names)
+procedure_division_header = { "PROCEDURE" ~ "DIVISION" ~ dot }
+paragraph_name = { ident ~ dot }
+paragraph_body = { (!paragraph_name ~ !procedure_division_header ~ ANY)* }
+paragraph = { paragraph_name ~ paragraph_body }
+procedure_division = { procedure_division_header ~ line_ending ~ paragraph* }
+
+// IDENTIFICATION DIVISION (minimal)
+identification_division_header = { "IDENTIFICATION" ~ "DIVISION" ~ dot }
+program_id = { "PROGRAM-ID" ~ dot? ~ ident ~ dot }
+identification_division = { identification_division_header ~ line_ending ~ program_id ~ line_ending? }
+
+// Full COBOL program
+program = {
+    SOI ~
+    line_ending? ~
+    identification_division? ~
+    line_ending? ~
+    data_division? ~
+    line_ending? ~
+    procedure_division? ~
+    line_ending? ~
+    EOI
+}

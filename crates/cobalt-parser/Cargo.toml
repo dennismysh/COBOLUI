@@ -1,0 +1,16 @@
+[package]
+name = "cobalt-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "COBOL parser for the COBALT UI framework"
+
+[dependencies]
+cobalt-ir = { path = "../cobalt-ir" }
+pest = "2"
+pest_derive = "2"
+thiserror = "2"
+
+[dev-dependencies]
+pretty_assertions = "1"
