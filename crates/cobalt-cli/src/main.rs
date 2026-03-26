@@ -5,7 +5,7 @@
 //!   cobalt run <file.cbl>     Parse and launch terminal renderer
 //!   cobalt check <file.cbl>   Validate COBOL for COBALT compatibility
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -149,8 +149,121 @@ fn print_tree(node: &cobalt_ir::Node, indent: usize) {
     }
 }
 
+fn validate_project_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        bail!("Project name cannot be empty");
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        bail!(
+            "Project name '{}' contains invalid characters (use alphanumeric and hyphens only)",
+            name
+        );
+    }
+    if name.starts_with('-') || name.ends_with('-') {
+        bail!("Project name '{}' cannot start or end with a hyphen", name);
+    }
+    Ok(())
+}
+
+fn generate_cobalt_toml(name: &str) -> String {
+    format!(
+        r##"[project]
+name = "{name}"
+version = "0.1.0"
+entry = "src/screens/MAIN.cbl"
+
+[build]
+target = "terminal"
+out_dir = "dist"
+
+[theme]
+name = "default"
+
+[theme.palette]
+0 = "#1E293B"
+1 = "#3B82F6"
+2 = "#FFFFFF"
+3 = "#F8FAFC"
+4 = "#1A1A1A"
+5 = "#2563EB"
+6 = "#16A34A"
+7 = "#DC2626"
+
+[theme.typography]
+heading = "Inter"
+body = "Inter"
+mono = "JetBrains Mono"
+"##
+    )
+}
+
+fn generate_main_cbl(name: &str) -> String {
+    let program_id = name.to_uppercase();
+    format!(
+        "\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. {program_id}.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  APP-STATE.
+           05  STATUS-MSG     PIC X(60) VALUE \"Welcome to {name}!\".
+
+       SCREEN SECTION.
+       01  MAIN-SCREEN.
+           05  HEADER.
+               10  TITLE      PIC X(30) VALUE \"{name}\".
+           05  CONTENT.
+               10  MSG-TEXT   PIC X(60) USING STATUS-MSG.
+
+       PROCEDURE DIVISION.
+       MAIN-LOOP.
+           STOP RUN.
+"
+    )
+}
+
+fn generate_gitignore() -> &'static str {
+    "dist/\ntarget/\n"
+}
+
 fn cmd_new(name: &str) -> Result<()> {
-    println!("Scaffolding new COBALT project: {}", name);
-    println!("(Not yet implemented — coming in a future release)");
+    validate_project_name(name)?;
+
+    let project_dir = PathBuf::from(name);
+
+    if project_dir.exists() {
+        bail!("Directory '{}' already exists", name);
+    }
+
+    let src_screens = project_dir.join("src").join("screens");
+    std::fs::create_dir_all(&src_screens)
+        .with_context(|| format!("Failed to create directory {}", src_screens.display()))?;
+
+    let toml_path = project_dir.join("cobalt.toml");
+    std::fs::write(&toml_path, generate_cobalt_toml(name))
+        .with_context(|| format!("Failed to write {}", toml_path.display()))?;
+
+    let main_cbl_path = src_screens.join("MAIN.cbl");
+    std::fs::write(&main_cbl_path, generate_main_cbl(name))
+        .with_context(|| format!("Failed to write {}", main_cbl_path.display()))?;
+
+    let gitignore_path = project_dir.join(".gitignore");
+    std::fs::write(&gitignore_path, generate_gitignore())
+        .with_context(|| format!("Failed to write {}", gitignore_path.display()))?;
+
+    println!("Created new COBALT project '{}'", name);
+    println!();
+    println!("  {}/", name);
+    println!("  ├── cobalt.toml");
+    println!("  ├── .gitignore");
+    println!("  └── src/");
+    println!("      └── screens/");
+    println!("          └── MAIN.cbl");
+    println!();
+    println!("Get started:");
+    println!("  cd {}", name);
+    println!("  cobalt run src/screens/MAIN.cbl");
+
     Ok(())
 }
