@@ -249,7 +249,7 @@ name = "default"
 - [x] Platform-neutral intermediate representation with JSON serialization
 - [x] Terminal renderer with focus management, text/numeric input, and button support
 - [x] CLI tool (`build`, `run`, `check`)
-- [ ] `cobalt new` project scaffolding
+- [x] `cobalt new` project scaffolding
 - [ ] Web/WASM renderer (HTML + CSS + JS)
 - [ ] Android renderer (Jetpack Compose)
 - [ ] Multi-screen navigation
