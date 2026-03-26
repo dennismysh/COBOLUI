@@ -252,7 +252,7 @@ name = "default"
 - [x] `cobalt new` project scaffolding
 - [ ] Web/WASM renderer (HTML + CSS + JS)
 - [ ] Android renderer (Jetpack Compose)
-- [ ] Multi-screen navigation
+- [x] Multi-screen navigation
 - [ ] COPY ... REPLACING support for reusable components
 
 ## License

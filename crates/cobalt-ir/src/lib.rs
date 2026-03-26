@@ -48,6 +48,7 @@ pub enum Node {
         name: String,
         label: String,
         action: Option<String>,
+        navigate: Option<String>,
         style: Style,
     },
 }

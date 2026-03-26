@@ -38,6 +38,9 @@ using_clause = { "USING" ~ ident }
 // ON-ACTION clause (event handler)
 on_action_clause = { "ON-ACTION" ~ "PERFORM" ~ ident }
 
+// GO-TO-SCREEN clause (screen navigation)
+go_to_screen_clause = { "GO-TO-SCREEN" ~ ident }
+
 // Color clauses
 bg_color_clause = { "BACKGROUND-COLOR" ~ "IS"? ~ digits }
 fg_color_clause = { "FOREGROUND-COLOR" ~ "IS"? ~ digits }
@@ -46,7 +49,7 @@ fg_color_clause = { "FOREGROUND-COLOR" ~ "IS"? ~ digits }
 level_88 = { "88" ~ ident ~ "VALUE" ~ "IS"? ~ (quoted_string | digits) ~ dot }
 
 // A single clause (any of the above)
-clause = { pic_clause | value_clause | using_clause | on_action_clause | bg_color_clause | fg_color_clause }
+clause = { pic_clause | value_clause | using_clause | on_action_clause | go_to_screen_clause | bg_color_clause | fg_color_clause }
 
 // A data entry: level number, name, clauses, period
 data_entry = { level_number ~ ident ~ clause* ~ dot }
