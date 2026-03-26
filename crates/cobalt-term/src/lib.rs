@@ -47,6 +47,7 @@ struct FocusableElement {
     kind: FocusKind,
     binding: Option<String>,
     action: Option<String>,
+    navigate: Option<String>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -101,6 +102,7 @@ fn collect_focusable(node: &Node, elements: &mut Vec<FocusableElement>) {
                 kind: FocusKind::TextInput,
                 binding: binding.clone(),
                 action: None,
+                navigate: None,
             });
         }
         Node::Numeric {
@@ -111,16 +113,21 @@ fn collect_focusable(node: &Node, elements: &mut Vec<FocusableElement>) {
                 kind: FocusKind::NumericInput,
                 binding: binding.clone(),
                 action: None,
+                navigate: None,
             });
         }
         Node::Button {
-            name, action, ..
+            name,
+            action,
+            navigate,
+            ..
         } => {
             elements.push(FocusableElement {
                 name: name.clone(),
                 kind: FocusKind::Button,
                 binding: None,
                 action: action.clone(),
+                navigate: navigate.clone(),
             });
         }
     }
@@ -214,6 +221,14 @@ impl Renderer for TermRenderer {
                     KeyCode::Enter => {
                         if let Some(el) = self.focus.current() {
                             if el.kind == FocusKind::Button {
+                                // Navigation takes priority
+                                if let Some(ref target) = el.navigate {
+                                    return Ok(Some(EventRecord {
+                                        event_type: "NAVIGATE".into(),
+                                        target: el.name.clone(),
+                                        payload: target.clone(),
+                                    }));
+                                }
                                 return Ok(Some(EventRecord {
                                     event_type: "CLICK".into(),
                                     target: el.name.clone(),
@@ -265,6 +280,16 @@ impl Renderer for TermRenderer {
                 _ => {}
             }
         }
+    }
+
+    fn rebuild_focus(&mut self, screen: &Screen) -> Result<()> {
+        let mut elements = Vec::new();
+        collect_focusable(&screen.root, &mut elements);
+        self.focus = FocusState {
+            elements,
+            index: 0,
+        };
+        Ok(())
     }
 
     fn shutdown(&mut self) -> Result<()> {

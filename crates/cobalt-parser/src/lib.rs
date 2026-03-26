@@ -81,6 +81,7 @@ struct FlatEntry {
     value: Option<String>,
     binding: Option<String>,
     action: Option<String>,
+    navigate: Option<String>,
     fg_color: Option<u8>,
     bg_color: Option<u8>,
     conditions: Vec<(String, String)>,
@@ -181,6 +182,7 @@ fn parse_data_entry(pair: pest::iterators::Pair<Rule>) -> FlatEntry {
     let mut value = None;
     let mut binding = None;
     let mut action = None;
+    let mut navigate = None;
     let mut fg_color = None;
     let mut bg_color = None;
 
@@ -215,6 +217,13 @@ fn parse_data_entry(pair: pest::iterators::Pair<Rule>) -> FlatEntry {
                                 }
                             }
                         }
+                        Rule::go_to_screen_clause => {
+                            for c in clause.into_inner() {
+                                if c.as_rule() == Rule::ident {
+                                    navigate = Some(c.as_str().to_string());
+                                }
+                            }
+                        }
                         Rule::bg_color_clause => {
                             for c in clause.into_inner() {
                                 if c.as_rule() == Rule::digits {
@@ -244,6 +253,7 @@ fn parse_data_entry(pair: pest::iterators::Pair<Rule>) -> FlatEntry {
         value,
         binding,
         action,
+        navigate,
         fg_color,
         bg_color,
         conditions: Vec::new(),
@@ -376,6 +386,7 @@ fn build_tree(entries: &[FlatEntry]) -> Vec<Node> {
                 value: entry.value.clone(),
                 binding: entry.binding.clone(),
                 action: entry.action.clone(),
+                navigate: entry.navigate.clone(),
                 fg_color: entry.fg_color,
                 bg_color: entry.bg_color,
                 conditions: entry.conditions.clone(),
@@ -427,12 +438,13 @@ fn make_node(entry: &FlatEntry, children: Vec<Node>, is_container: bool) -> Node
         };
     }
 
-    // If it has an action but no PIC, it's a button
-    if entry.action.is_some() {
+    // If it has an action or navigation target but no PIC, it's a button
+    if entry.action.is_some() || entry.navigate.is_some() {
         return Node::Button {
             name: entry.name.clone(),
             label: entry.value.clone().unwrap_or_else(|| entry.name.clone()),
             action: entry.action.clone(),
+            navigate: entry.navigate.clone(),
             style,
         };
     }
@@ -444,6 +456,7 @@ fn make_node(entry: &FlatEntry, children: Vec<Node>, is_container: bool) -> Node
                 name: entry.name.clone(),
                 label: entry.value.clone().unwrap_or_default(),
                 action: entry.action.clone(),
+                navigate: entry.navigate.clone(),
                 style,
             };
         }
@@ -553,6 +566,58 @@ WORKING-STORAGE SECTION.
         let counter = &app.state["COUNTER"];
         assert_eq!(counter.pic.kind, PicKind::Numeric);
         assert_eq!(counter.pic.width, 4);
+    }
+
+    #[test]
+    fn test_parse_go_to_screen() {
+        let source = r#"
+DATA DIVISION.
+SCREEN SECTION.
+01 MAIN-SCREEN.
+   05 CONTROLS.
+      10 NEXT-BTN VALUE "Next" GO-TO-SCREEN SETTINGS-SCREEN.
+01 SETTINGS-SCREEN.
+   05 CONTROLS.
+      10 BACK-BTN VALUE "Back" GO-TO-SCREEN MAIN-SCREEN.
+"#;
+        let app = parse(source).expect("should parse");
+        assert_eq!(app.screens.len(), 2);
+        assert_eq!(app.screens[0].name, "MAIN-SCREEN");
+        assert_eq!(app.screens[1].name, "SETTINGS-SCREEN");
+
+        // Check navigation target on first screen's button
+        if let Node::Container { ref children, .. } = app.screens[0].root {
+            if let Node::Container { ref children, .. } = children[0] {
+                if let Node::Button {
+                    ref navigate,
+                    ref label,
+                    ..
+                } = children[0]
+                {
+                    assert_eq!(label, "NEXT");
+                    assert_eq!(navigate.as_deref(), Some("SETTINGS-SCREEN"));
+                } else {
+                    panic!("expected button node");
+                }
+            }
+        }
+
+        // Check navigation target on second screen's button
+        if let Node::Container { ref children, .. } = app.screens[1].root {
+            if let Node::Container { ref children, .. } = children[0] {
+                if let Node::Button {
+                    ref navigate,
+                    ref label,
+                    ..
+                } = children[0]
+                {
+                    assert_eq!(label, "BACK");
+                    assert_eq!(navigate.as_deref(), Some("MAIN-SCREEN"));
+                } else {
+                    panic!("expected button node");
+                }
+            }
+        }
     }
 
     #[test]

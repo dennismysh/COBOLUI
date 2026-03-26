@@ -30,6 +30,11 @@ pub trait Renderer {
 
     /// Tear down the rendering context and free resources.
     fn shutdown(&mut self) -> Result<()>;
+
+    /// Rebuild internal focus state for a new screen (called on navigation).
+    fn rebuild_focus(&mut self, _screen: &Screen) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Run the main event loop: init, render, poll, repeat until exit.
@@ -41,7 +46,7 @@ pub fn run_app(renderer: &mut dyn Renderer, app: &CobaltApp) -> Result<()> {
         return Ok(());
     }
 
-    let screen = &app.screens[0];
+    let mut current_screen: usize = 0;
     let mut state = cobalt_ir::RuntimeState::new();
 
     // Initialize state from app defaults
@@ -53,7 +58,7 @@ pub fn run_app(renderer: &mut dyn Renderer, app: &CobaltApp) -> Result<()> {
         }
     }
 
-    renderer.render(screen, &state)?;
+    renderer.render(&app.screens[current_screen], &state)?;
 
     loop {
         match renderer.poll_event()? {
@@ -66,9 +71,16 @@ pub fn run_app(renderer: &mut dyn Renderer, app: &CobaltApp) -> Result<()> {
                             state.insert(event.target.clone(), event.payload.clone());
                         }
                     }
+                    "NAVIGATE" => {
+                        // Switch to target screen by name
+                        if let Some(idx) = app.screens.iter().position(|s| s.name == event.payload) {
+                            current_screen = idx;
+                            renderer.rebuild_focus(&app.screens[current_screen])?;
+                        }
+                    }
                     _ => {}
                 }
-                renderer.render(screen, &state)?;
+                renderer.render(&app.screens[current_screen], &state)?;
             }
             None => break,
         }
