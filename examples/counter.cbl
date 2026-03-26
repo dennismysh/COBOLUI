@@ -1,0 +1,34 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. COUNTER.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  APP-STATE.
+           05  COUNTER-VAL    PIC 9(4) VALUE 0.
+           05  STATUS-MSG     PIC X(60) VALUE "Ready".
+
+       SCREEN SECTION.
+       01  MAIN-SCREEN.
+           05  HEADER.
+               10  TITLE      PIC X(30) VALUE "Counter App".
+           05  DISPLAY-AREA.
+               10  COUNT-DISPLAY PIC 9(4) USING COUNTER-VAL.
+           05  CONTROLS.
+               10  INC-BTN    VALUE "+" ON-ACTION PERFORM HANDLE-INCREMENT.
+               10  DEC-BTN    VALUE "-" ON-ACTION PERFORM HANDLE-DECREMENT.
+               10  RESET-BTN  VALUE "Reset" ON-ACTION PERFORM HANDLE-RESET.
+           05  STATUS-BAR.
+               10  MSG-TEXT   PIC X(60) USING STATUS-MSG.
+
+       PROCEDURE DIVISION.
+       MAIN-LOOP.
+           STOP RUN.
+
+       HANDLE-INCREMENT.
+           ADD 1 TO COUNTER-VAL.
+
+       HANDLE-DECREMENT.
+           SUBTRACT 1 FROM COUNTER-VAL.
+
+       HANDLE-RESET.
+           MOVE 0 TO COUNTER-VAL.

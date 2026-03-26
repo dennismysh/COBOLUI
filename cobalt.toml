@@ -1,0 +1,28 @@
+# COBALT Project Configuration
+
+[project]
+name = "my-cobalt-app"
+version = "0.1.0"
+entry = "src/screens/MAIN.cbl"
+
+[build]
+target = "terminal"    # "terminal", "web", "android"
+out_dir = "dist"
+
+[theme]
+name = "default"
+
+[theme.palette]
+0 = "#1E293B"    # bg-primary
+1 = "#3B82F6"    # accent
+2 = "#FFFFFF"    # bg-surface
+3 = "#F8FAFC"    # bg-muted
+4 = "#1A1A1A"    # text-primary
+5 = "#2563EB"    # link
+6 = "#16A34A"    # success
+7 = "#DC2626"    # error
+
+[theme.typography]
+heading = "Inter"
+body = "Inter"
+mono = "JetBrains Mono"
