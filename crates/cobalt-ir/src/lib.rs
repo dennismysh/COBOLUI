@@ -12,6 +12,7 @@ pub struct CobaltApp {
     pub screens: Vec<Screen>,
     pub state: StateMap,
     pub handlers: Vec<Handler>,
+    pub paragraphs: HashMap<String, Paragraph>,
 }
 
 /// A single screen (mapped from a level-01 SCREEN SECTION entry).
@@ -110,6 +111,75 @@ pub type StateMap = HashMap<String, StateField>;
 pub struct Handler {
     pub name: String,
     pub paragraph_name: String,
+}
+
+/// A parsed COBOL statement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Statement {
+    /// MOVE source TO target
+    Move { source: Expr, target: String },
+    /// ADD source TO target
+    Add { source: Expr, target: String },
+    /// SUBTRACT source FROM target
+    Subtract { source: Expr, target: String },
+    /// MULTIPLY source BY target
+    Multiply { source: Expr, target: String },
+    /// DIVIDE source INTO target
+    Divide { source: Expr, target: String },
+    /// DISPLAY values
+    Display { values: Vec<Expr> },
+    /// IF condition THEN statements ELSE statements END-IF
+    If {
+        condition: Condition,
+        then_body: Vec<Statement>,
+        else_body: Vec<Statement>,
+    },
+    /// PERFORM paragraph-name
+    Perform { paragraph: String },
+    /// STRING sources DELIMITED BY delim INTO target
+    StringConcat {
+        sources: Vec<(Expr, Expr)>,
+        into: String,
+    },
+    /// STOP RUN
+    StopRun,
+}
+
+/// An expression (literal or variable reference).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Expr {
+    Literal(String),
+    NumericLiteral(f64),
+    Variable(String),
+}
+
+/// A condition for IF statements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Condition {
+    Compare {
+        left: Expr,
+        op: CompareOp,
+        right: Expr,
+    },
+    ConditionName(String),
+}
+
+/// Comparison operators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CompareOp {
+    Equal,
+    NotEqual,
+    GreaterThan,
+    LessThan,
+    GreaterOrEqual,
+    LessOrEqual,
+}
+
+/// A parsed paragraph with its statements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Paragraph {
+    pub name: String,
+    pub statements: Vec<Statement>,
 }
 
 /// An event record populated by the runtime's event loop.

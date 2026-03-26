@@ -32,6 +32,7 @@ pub fn parse(source: &str) -> Result<CobaltApp, ParseError> {
     let mut state: StateMap = HashMap::new();
     let mut screens: Vec<Screen> = Vec::new();
     let mut handlers: Vec<Handler> = Vec::new();
+    let mut paragraphs: HashMap<String, Paragraph> = HashMap::new();
 
     for pair in pairs {
         if pair.as_rule() == Rule::program {
@@ -41,7 +42,7 @@ pub fn parse(source: &str) -> Result<CobaltApp, ParseError> {
                         parse_data_division(inner, &mut state, &mut screens);
                     }
                     Rule::procedure_division => {
-                        parse_procedure_division(inner, &mut handlers);
+                        parse_procedure_division(inner, &mut handlers, &mut paragraphs);
                     }
                     _ => {}
                 }
@@ -53,6 +54,7 @@ pub fn parse(source: &str) -> Result<CobaltApp, ParseError> {
         screens,
         state,
         handlers,
+        paragraphs,
     })
 }
 
@@ -487,23 +489,310 @@ fn make_node(entry: &FlatEntry, children: Vec<Node>, is_container: bool) -> Node
     }
 }
 
-fn parse_procedure_division(pair: pest::iterators::Pair<Rule>, handlers: &mut Vec<Handler>) {
+fn parse_procedure_division(
+    pair: pest::iterators::Pair<Rule>,
+    handlers: &mut Vec<Handler>,
+    paragraphs: &mut HashMap<String, Paragraph>,
+) {
     for inner in pair.into_inner() {
         if inner.as_rule() == Rule::paragraph {
+            let mut para_name = String::new();
+            let mut statements = Vec::new();
+
             for p in inner.into_inner() {
-                if p.as_rule() == Rule::paragraph_name {
-                    for name in p.into_inner() {
-                        if name.as_rule() == Rule::ident {
-                            handlers.push(Handler {
-                                name: name.as_str().to_string(),
-                                paragraph_name: name.as_str().to_string(),
-                            });
+                match p.as_rule() {
+                    Rule::paragraph_name => {
+                        for name in p.into_inner() {
+                            if name.as_rule() == Rule::ident {
+                                para_name = name.as_str().to_string();
+                            }
+                        }
+                    }
+                    Rule::statement => {
+                        if let Some(stmt) = parse_statement(p) {
+                            statements.push(stmt);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if !para_name.is_empty() {
+                handlers.push(Handler {
+                    name: para_name.clone(),
+                    paragraph_name: para_name.clone(),
+                });
+                paragraphs.insert(
+                    para_name.clone(),
+                    Paragraph {
+                        name: para_name,
+                        statements,
+                    },
+                );
+            }
+        }
+    }
+}
+
+fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Option<Statement> {
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::move_stmt => return Some(parse_move_stmt(inner)),
+            Rule::add_stmt => return Some(parse_add_stmt(inner)),
+            Rule::subtract_stmt => return Some(parse_subtract_stmt(inner)),
+            Rule::multiply_stmt => return Some(parse_multiply_stmt(inner)),
+            Rule::divide_stmt => return Some(parse_divide_stmt(inner)),
+            Rule::display_stmt => return Some(parse_display_stmt(inner)),
+            Rule::perform_stmt => return Some(parse_perform_stmt(inner)),
+            Rule::stop_stmt => return Some(Statement::StopRun),
+            Rule::if_stmt => return Some(parse_if_stmt(inner)),
+            Rule::string_stmt => return Some(parse_string_stmt(inner)),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn parse_expr(pair: pest::iterators::Pair<Rule>) -> Expr {
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::quoted_string => {
+                let s = inner.as_str();
+                return Expr::Literal(s[1..s.len() - 1].to_string());
+            }
+            Rule::digits => {
+                if let Ok(n) = inner.as_str().parse::<f64>() {
+                    return Expr::NumericLiteral(n);
+                }
+                return Expr::Literal(inner.as_str().to_string());
+            }
+            Rule::ident => {
+                return Expr::Variable(inner.as_str().to_string());
+            }
+            _ => {}
+        }
+    }
+    Expr::Literal(String::new())
+}
+
+fn parse_move_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut exprs = Vec::new();
+    let mut target = String::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => exprs.push(parse_expr(inner)),
+            Rule::ident => target = inner.as_str().to_string(),
+            _ => {}
+        }
+    }
+    Statement::Move {
+        source: exprs.into_iter().next().unwrap_or(Expr::Literal(String::new())),
+        target,
+    }
+}
+
+fn parse_add_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut exprs = Vec::new();
+    let mut target = String::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => exprs.push(parse_expr(inner)),
+            Rule::ident => target = inner.as_str().to_string(),
+            _ => {}
+        }
+    }
+    Statement::Add {
+        source: exprs.into_iter().next().unwrap_or(Expr::NumericLiteral(0.0)),
+        target,
+    }
+}
+
+fn parse_subtract_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut exprs = Vec::new();
+    let mut target = String::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => exprs.push(parse_expr(inner)),
+            Rule::ident => target = inner.as_str().to_string(),
+            _ => {}
+        }
+    }
+    Statement::Subtract {
+        source: exprs.into_iter().next().unwrap_or(Expr::NumericLiteral(0.0)),
+        target,
+    }
+}
+
+fn parse_multiply_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut exprs = Vec::new();
+    let mut target = String::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => exprs.push(parse_expr(inner)),
+            Rule::ident => target = inner.as_str().to_string(),
+            _ => {}
+        }
+    }
+    Statement::Multiply {
+        source: exprs.into_iter().next().unwrap_or(Expr::NumericLiteral(1.0)),
+        target,
+    }
+}
+
+fn parse_divide_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut exprs = Vec::new();
+    let mut target = String::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => exprs.push(parse_expr(inner)),
+            Rule::ident => target = inner.as_str().to_string(),
+            _ => {}
+        }
+    }
+    Statement::Divide {
+        source: exprs.into_iter().next().unwrap_or(Expr::NumericLiteral(1.0)),
+        target,
+    }
+}
+
+fn parse_display_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut values = Vec::new();
+    for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::expr {
+            values.push(parse_expr(inner));
+        }
+    }
+    Statement::Display { values }
+}
+
+fn parse_perform_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut paragraph = String::new();
+    for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::ident {
+            paragraph = inner.as_str().to_string();
+        }
+    }
+    Statement::Perform { paragraph }
+}
+
+fn parse_if_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut condition = Condition::ConditionName(String::new());
+    let mut then_body = Vec::new();
+    let mut else_body = Vec::new();
+    let mut in_else = false;
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::condition => {
+                condition = parse_condition(inner);
+            }
+            Rule::statement => {
+                if let Some(stmt) = parse_statement(inner) {
+                    if in_else {
+                        else_body.push(stmt);
+                    } else {
+                        then_body.push(stmt);
+                    }
+                }
+            }
+            Rule::else_clause => {
+                in_else = true;
+                for else_inner in inner.into_inner() {
+                    if else_inner.as_rule() == Rule::statement {
+                        if let Some(stmt) = parse_statement(else_inner) {
+                            else_body.push(stmt);
                         }
                     }
                 }
             }
+            _ => {}
         }
     }
+
+    Statement::If {
+        condition,
+        then_body,
+        else_body,
+    }
+}
+
+fn parse_condition(pair: pest::iterators::Pair<Rule>) -> Condition {
+    let mut left = Expr::Literal(String::new());
+    let mut op = CompareOp::Equal;
+    let mut right = Expr::Literal(String::new());
+    let mut idx = 0;
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => {
+                if idx == 0 {
+                    left = parse_expr(inner);
+                } else {
+                    right = parse_expr(inner);
+                }
+                idx += 1;
+            }
+            Rule::compare_op => {
+                let op_str = inner.as_str().trim();
+                op = match op_str {
+                    "=" => CompareOp::Equal,
+                    ">" => CompareOp::GreaterThan,
+                    "<" => CompareOp::LessThan,
+                    ">=" => CompareOp::GreaterOrEqual,
+                    "<=" => CompareOp::LessOrEqual,
+                    _ if op_str.contains("NOT") => CompareOp::NotEqual,
+                    _ => CompareOp::Equal,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    Condition::Compare { left, op, right }
+}
+
+fn parse_string_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut sources = Vec::new();
+    let mut into = String::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::string_source => {
+                let mut src_expr = Expr::Literal(String::new());
+                let mut delim_expr = Expr::Literal("SIZE".to_string());
+                for s in inner.into_inner() {
+                    match s.as_rule() {
+                        Rule::expr => src_expr = parse_expr(s),
+                        Rule::string_delim => {
+                            let delim_text = s.as_str().trim();
+                            delim_expr = match delim_text {
+                                "SIZE" => Expr::Literal("SIZE".to_string()),
+                                "SPACE" | "SPACES" => Expr::Literal("SPACE".to_string()),
+                                _ => {
+                                    // Quoted string delimiter
+                                    if delim_text.starts_with('"') {
+                                        Expr::Literal(
+                                            delim_text[1..delim_text.len() - 1].to_string(),
+                                        )
+                                    } else {
+                                        Expr::Literal(delim_text.to_string())
+                                    }
+                                }
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+                sources.push((src_expr, delim_expr));
+            }
+            Rule::ident => {
+                into = inner.as_str().to_string();
+            }
+            _ => {}
+        }
+    }
+
+    Statement::StringConcat { sources, into }
 }
 
 #[cfg(test)]
@@ -617,6 +906,147 @@ SCREEN SECTION.
                     panic!("expected button node");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_parse_counter_paragraphs() {
+        let source = r#"
+IDENTIFICATION DIVISION.
+PROGRAM-ID. COUNTER.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01 APP-STATE.
+   05 COUNTER-VAL PIC 9(4) VALUE 0.
+
+SCREEN SECTION.
+01 MAIN-SCREEN.
+   05 CONTROLS.
+      10 INC-BTN VALUE "+" ON-ACTION PERFORM HANDLE-INCREMENT.
+
+PROCEDURE DIVISION.
+MAIN-LOOP.
+    STOP RUN.
+
+HANDLE-INCREMENT.
+    ADD 1 TO COUNTER-VAL.
+
+HANDLE-DECREMENT.
+    SUBTRACT 1 FROM COUNTER-VAL.
+
+HANDLE-RESET.
+    MOVE 0 TO COUNTER-VAL.
+"#;
+        let app = parse(source).expect("should parse");
+        assert_eq!(app.paragraphs.len(), 4);
+
+        // Check HANDLE-INCREMENT has ADD statement
+        let inc = &app.paragraphs["HANDLE-INCREMENT"];
+        assert_eq!(inc.statements.len(), 1);
+        match &inc.statements[0] {
+            Statement::Add { source, target } => {
+                assert!(matches!(source, Expr::NumericLiteral(n) if *n == 1.0));
+                assert_eq!(target, "COUNTER-VAL");
+            }
+            other => panic!("expected Add, got {:?}", other),
+        }
+
+        // Check HANDLE-DECREMENT has SUBTRACT statement
+        let dec = &app.paragraphs["HANDLE-DECREMENT"];
+        assert_eq!(dec.statements.len(), 1);
+        assert!(matches!(&dec.statements[0], Statement::Subtract { .. }));
+
+        // Check HANDLE-RESET has MOVE statement
+        let reset = &app.paragraphs["HANDLE-RESET"];
+        assert_eq!(reset.statements.len(), 1);
+        assert!(matches!(&reset.statements[0], Statement::Move { .. }));
+    }
+
+    #[test]
+    fn test_parse_if_else() {
+        let source = r#"
+PROCEDURE DIVISION.
+CHECK-VAL.
+    IF COUNTER-VAL > 10
+        MOVE "BIG" TO STATUS-MSG
+    ELSE
+        MOVE "SMALL" TO STATUS-MSG
+    END-IF.
+"#;
+        let app = parse(source).expect("should parse");
+        let check = &app.paragraphs["CHECK-VAL"];
+        assert_eq!(check.statements.len(), 1);
+        match &check.statements[0] {
+            Statement::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
+                assert!(matches!(
+                    condition,
+                    Condition::Compare {
+                        op: CompareOp::GreaterThan,
+                        ..
+                    }
+                ));
+                assert_eq!(then_body.len(), 1);
+                assert_eq!(else_body.len(), 1);
+            }
+            other => panic!("expected If, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_string_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+GREET.
+    STRING "HELLO, " DELIMITED BY SIZE
+           USER-NAME DELIMITED BY SIZE
+           "!" DELIMITED BY SIZE
+    INTO STATUS-MSG.
+"#;
+        let app = parse(source).expect("should parse");
+        let greet = &app.paragraphs["GREET"];
+        assert_eq!(greet.statements.len(), 1);
+        match &greet.statements[0] {
+            Statement::StringConcat { sources, into } => {
+                assert_eq!(sources.len(), 3);
+                assert_eq!(into, "STATUS-MSG");
+            }
+            other => panic!("expected StringConcat, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_display_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+SHOW.
+    DISPLAY "Hello!".
+"#;
+        let app = parse(source).expect("should parse");
+        let show = &app.paragraphs["SHOW"];
+        assert_eq!(show.statements.len(), 1);
+        assert!(matches!(&show.statements[0], Statement::Display { values } if values.len() == 1));
+    }
+
+    #[test]
+    fn test_parse_perform_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+MAIN.
+    PERFORM HELPER.
+HELPER.
+    MOVE 0 TO X.
+"#;
+        let app = parse(source).expect("should parse");
+        let main = &app.paragraphs["MAIN"];
+        assert_eq!(main.statements.len(), 1);
+        match &main.statements[0] {
+            Statement::Perform { paragraph } => assert_eq!(paragraph, "HELPER"),
+            other => panic!("expected Perform, got {:?}", other),
         }
     }
 

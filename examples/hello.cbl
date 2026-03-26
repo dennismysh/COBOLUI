@@ -22,4 +22,7 @@
            STOP RUN.
 
        HANDLE-GREET.
-           DISPLAY "Hello!".
+           STRING "Hello, " DELIMITED BY SIZE
+                  USER-NAME DELIMITED BY SIZE
+                  "!" DELIMITED BY SIZE
+           INTO STATUS-MSG.
