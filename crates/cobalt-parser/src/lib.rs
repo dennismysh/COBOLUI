@@ -543,10 +543,15 @@ fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Option<Statement> {
             Rule::multiply_stmt => return Some(parse_multiply_stmt(inner)),
             Rule::divide_stmt => return Some(parse_divide_stmt(inner)),
             Rule::display_stmt => return Some(parse_display_stmt(inner)),
+            Rule::perform_until_stmt => return Some(parse_perform_until_stmt(inner)),
             Rule::perform_stmt => return Some(parse_perform_stmt(inner)),
             Rule::stop_stmt => return Some(Statement::StopRun),
             Rule::if_stmt => return Some(parse_if_stmt(inner)),
             Rule::string_stmt => return Some(parse_string_stmt(inner)),
+            Rule::evaluate_stmt => return Some(parse_evaluate_stmt(inner)),
+            Rule::compute_stmt => return Some(parse_compute_stmt(inner)),
+            Rule::accept_stmt => return Some(parse_accept_stmt(inner)),
+            Rule::set_stmt => return Some(parse_set_stmt(inner)),
             _ => {}
         }
     }
@@ -793,6 +798,215 @@ fn parse_string_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
     }
 
     Statement::StringConcat { sources, into }
+}
+
+fn parse_evaluate_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut subject = Expr::Literal(String::new());
+    let mut whens = Vec::new();
+    let mut other = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::expr => {
+                subject = parse_expr(inner);
+            }
+            Rule::when_clause => {
+                let mut value = Expr::Literal(String::new());
+                let mut body = Vec::new();
+                for w in inner.into_inner() {
+                    match w.as_rule() {
+                        Rule::expr => value = parse_expr(w),
+                        Rule::statement => {
+                            if let Some(stmt) = parse_statement(w) {
+                                body.push(stmt);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                whens.push(WhenClause { value, body });
+            }
+            Rule::when_other => {
+                for w in inner.into_inner() {
+                    if w.as_rule() == Rule::statement {
+                        if let Some(stmt) = parse_statement(w) {
+                            other.push(stmt);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Statement::Evaluate {
+        subject,
+        whens,
+        other,
+    }
+}
+
+fn parse_perform_until_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut paragraph = String::new();
+    let mut condition = Condition::ConditionName(String::new());
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::ident => paragraph = inner.as_str().to_string(),
+            Rule::condition => condition = parse_condition(inner),
+            _ => {}
+        }
+    }
+
+    Statement::PerformUntil {
+        paragraph,
+        condition,
+    }
+}
+
+fn parse_compute_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut target = String::new();
+    let mut expression = ArithExpr::Num(0.0);
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::ident => target = inner.as_str().to_string(),
+            Rule::arith_expr => expression = parse_arith_expr(inner),
+            _ => {}
+        }
+    }
+
+    Statement::Compute { target, expression }
+}
+
+fn parse_arith_expr(pair: pest::iterators::Pair<Rule>) -> ArithExpr {
+    let mut terms: Vec<ArithExpr> = Vec::new();
+    let mut ops: Vec<ArithOp> = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::arith_mul => {
+                terms.push(parse_arith_mul(inner));
+            }
+            Rule::arith_add_op => {
+                match inner.as_str().trim() {
+                    "+" => ops.push(ArithOp::Add),
+                    "-" => ops.push(ArithOp::Subtract),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if terms.is_empty() {
+        return ArithExpr::Num(0.0);
+    }
+
+    let mut result = terms.remove(0);
+    for (i, op) in ops.into_iter().enumerate() {
+        if i < terms.len() {
+            result = ArithExpr::BinOp {
+                left: Box::new(result),
+                op,
+                right: Box::new(terms[i].clone()),
+            };
+        }
+    }
+    result
+}
+
+fn parse_arith_mul(pair: pest::iterators::Pair<Rule>) -> ArithExpr {
+    let mut factors: Vec<ArithExpr> = Vec::new();
+    let mut ops: Vec<ArithOp> = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::arith_primary => {
+                factors.push(parse_arith_primary(inner));
+            }
+            Rule::arith_mul_op => {
+                match inner.as_str().trim() {
+                    "*" => ops.push(ArithOp::Multiply),
+                    "/" => ops.push(ArithOp::Divide),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if factors.is_empty() {
+        return ArithExpr::Num(0.0);
+    }
+
+    let mut result = factors.remove(0);
+    for (i, op) in ops.into_iter().enumerate() {
+        if i < factors.len() {
+            result = ArithExpr::BinOp {
+                left: Box::new(result),
+                op,
+                right: Box::new(factors[i].clone()),
+            };
+        }
+    }
+    result
+}
+
+fn parse_arith_primary(pair: pest::iterators::Pair<Rule>) -> ArithExpr {
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::digits => {
+                return ArithExpr::Num(inner.as_str().parse::<f64>().unwrap_or(0.0));
+            }
+            Rule::ident => {
+                return ArithExpr::Var(inner.as_str().to_string());
+            }
+            Rule::arith_expr => {
+                return parse_arith_expr(inner);
+            }
+            _ => {}
+        }
+    }
+    ArithExpr::Num(0.0)
+}
+
+fn parse_accept_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut target = String::new();
+    let mut source = AcceptSource::Date;
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::ident => target = inner.as_str().to_string(),
+            Rule::accept_source => {
+                source = match inner.as_str().trim() {
+                    "TIME" => AcceptSource::Time,
+                    "DAY-OF-WEEK" => AcceptSource::DayOfWeek,
+                    _ => AcceptSource::Date,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    Statement::Accept { target, source }
+}
+
+fn parse_set_stmt(pair: pest::iterators::Pair<Rule>) -> Statement {
+    let mut condition = String::new();
+    let mut value = true;
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::ident => condition = inner.as_str().to_string(),
+            Rule::set_bool => {
+                value = inner.as_str().trim() == "TRUE";
+            }
+            _ => {}
+        }
+    }
+
+    Statement::Set { condition, value }
 }
 
 #[cfg(test)]
@@ -1078,6 +1292,125 @@ SCREEN SECTION.
                     panic!("expected button node");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_parse_evaluate_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+CHECK-OP.
+    EVALUATE OPERATION
+        WHEN "ADD"
+            MOVE "Adding" TO STATUS-MSG
+        WHEN "SUB"
+            MOVE "Subbing" TO STATUS-MSG
+        WHEN OTHER
+            MOVE "Unknown" TO STATUS-MSG
+    END-EVALUATE.
+"#;
+        let app = parse(source).expect("should parse");
+        let check = &app.paragraphs["CHECK-OP"];
+        assert_eq!(check.statements.len(), 1);
+        match &check.statements[0] {
+            Statement::Evaluate { whens, other, .. } => {
+                assert_eq!(whens.len(), 2);
+                assert_eq!(other.len(), 1);
+            }
+            other => panic!("expected Evaluate, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_perform_until_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+LOOP-IT.
+    PERFORM INC-COUNTER UNTIL COUNTER >= 10.
+"#;
+        let app = parse(source).expect("should parse");
+        let looper = &app.paragraphs["LOOP-IT"];
+        assert_eq!(looper.statements.len(), 1);
+        match &looper.statements[0] {
+            Statement::PerformUntil { paragraph, condition } => {
+                assert_eq!(paragraph, "INC-COUNTER");
+                assert!(matches!(condition, Condition::Compare { op: CompareOp::GreaterOrEqual, .. }));
+            }
+            other => panic!("expected PerformUntil, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_compute_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+CALC.
+    COMPUTE RESULT = A + B * 2.
+"#;
+        let app = parse(source).expect("should parse");
+        let calc = &app.paragraphs["CALC"];
+        assert_eq!(calc.statements.len(), 1);
+        match &calc.statements[0] {
+            Statement::Compute { target, expression } => {
+                assert_eq!(target, "RESULT");
+                // Should be A + (B * 2) due to precedence
+                assert!(matches!(expression, ArithExpr::BinOp { op: ArithOp::Add, .. }));
+            }
+            other => panic!("expected Compute, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_accept_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+GET-DATE.
+    ACCEPT CURRENT-DATE FROM DATE.
+    ACCEPT CURRENT-TIME FROM TIME.
+"#;
+        let app = parse(source).expect("should parse");
+        let para = &app.paragraphs["GET-DATE"];
+        assert_eq!(para.statements.len(), 2);
+        match &para.statements[0] {
+            Statement::Accept { target, source } => {
+                assert_eq!(target, "CURRENT-DATE");
+                assert_eq!(*source, AcceptSource::Date);
+            }
+            other => panic!("expected Accept, got {:?}", other),
+        }
+        match &para.statements[1] {
+            Statement::Accept { target, source } => {
+                assert_eq!(target, "CURRENT-TIME");
+                assert_eq!(*source, AcceptSource::Time);
+            }
+            other => panic!("expected Accept, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_set_stmt() {
+        let source = r#"
+PROCEDURE DIVISION.
+TOGGLE.
+    SET IS-ACTIVE TO TRUE.
+    SET IS-CLOSED TO FALSE.
+"#;
+        let app = parse(source).expect("should parse");
+        let para = &app.paragraphs["TOGGLE"];
+        assert_eq!(para.statements.len(), 2);
+        match &para.statements[0] {
+            Statement::Set { condition, value } => {
+                assert_eq!(condition, "IS-ACTIVE");
+                assert!(*value);
+            }
+            other => panic!("expected Set, got {:?}", other),
+        }
+        match &para.statements[1] {
+            Statement::Set { condition, value } => {
+                assert_eq!(condition, "IS-CLOSED");
+                assert!(!*value);
+            }
+            other => panic!("expected Set, got {:?}", other),
         }
     }
 }

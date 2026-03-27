@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/cobalt-ir",
     "crates/cobalt-parser",
-    "crates/cobalt-render",
     "crates/cobalt-term",
     "crates/cobalt-cli",
 ]

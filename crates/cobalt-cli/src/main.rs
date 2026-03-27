@@ -72,7 +72,7 @@ fn cmd_run(file: &PathBuf) -> Result<()> {
         .with_context(|| format!("Failed to parse {}", file.display()))?;
 
     let mut renderer = cobalt_term::TermRenderer::new();
-    cobalt_render::run_app(&mut renderer, &app)
+    cobalt_term::run_app(&mut renderer, &app)
         .with_context(|| "Runtime error")?;
 
     Ok(())

@@ -7,6 +7,12 @@
            05  OPERAND-A       PIC 9(4) VALUE 0.
            05  OPERAND-B       PIC 9(4) VALUE 0.
            05  RESULT-VAL      PIC 9(8) VALUE 0.
+           05  MEMORY-VAL      PIC 9(8) VALUE 0.
+           05  OPERATION        PIC X(10) VALUE "ADD".
+               88  IS-ADDING    VALUE "ADD".
+               88  IS-SUBBING   VALUE "SUB".
+               88  IS-MULTING   VALUE "MUL".
+               88  IS-DIVIDING  VALUE "DIV".
            05  STATUS-MSG      PIC X(60) VALUE "Ready".
 
        SCREEN SECTION.
@@ -18,11 +24,19 @@
                10  B-FIELD     PIC 9(4) USING OPERAND-B.
            05  RESULT-AREA.
                10  RES-DISPLAY PIC 9(8) USING RESULT-VAL.
-           05  CONTROLS.
+               10  MEM-DISPLAY PIC 9(8) USING MEMORY-VAL.
+           05  OPERATIONS.
                10  ADD-BTN     VALUE "Add" ON-ACTION PERFORM HANDLE-ADD.
                10  SUB-BTN     VALUE "Sub" ON-ACTION PERFORM HANDLE-SUB.
                10  MUL-BTN     VALUE "Mul" ON-ACTION PERFORM HANDLE-MUL.
                10  DIV-BTN     VALUE "Div" ON-ACTION PERFORM HANDLE-DIV.
+           05  MEMORY-CONTROLS.
+               10  MPLUS-BTN   VALUE "M-Plus" ON-ACTION PERFORM HANDLE-MPLUS.
+               10  MMINUS-BTN  VALUE "M-Minus" ON-ACTION PERFORM HANDLE-MMINUS.
+               10  MR-BTN      VALUE "MR" ON-ACTION PERFORM HANDLE-MR.
+               10  MC-BTN      VALUE "MC" ON-ACTION PERFORM HANDLE-MC.
+           05  EXTRA-CONTROLS.
+               10  COMPUTE-BTN VALUE "Expr" ON-ACTION PERFORM HANDLE-COMPUTE.
                10  CHECK-BTN   VALUE "Check" ON-ACTION PERFORM HANDLE-CHECK.
            05  STATUS-BAR.
                10  MSG-TEXT    PIC X(60) USING STATUS-MSG.
@@ -32,36 +46,75 @@
            STOP RUN.
 
        HANDLE-ADD.
-           MOVE OPERAND-A TO RESULT-VAL.
-           ADD OPERAND-B TO RESULT-VAL.
-           MOVE "Added" TO STATUS-MSG.
+           SET IS-ADDING TO TRUE.
+           PERFORM DO-OPERATION.
 
        HANDLE-SUB.
-           MOVE OPERAND-A TO RESULT-VAL.
-           SUBTRACT OPERAND-B FROM RESULT-VAL.
-           MOVE "Subtracted" TO STATUS-MSG.
+           SET IS-SUBBING TO TRUE.
+           PERFORM DO-OPERATION.
 
        HANDLE-MUL.
-           MOVE OPERAND-A TO RESULT-VAL.
-           MULTIPLY OPERAND-B BY RESULT-VAL.
-           MOVE "Multiplied" TO STATUS-MSG.
+           SET IS-MULTING TO TRUE.
+           PERFORM DO-OPERATION.
 
        HANDLE-DIV.
-           IF OPERAND-B = 0
-               MOVE "Cannot divide by zero!" TO STATUS-MSG
-           ELSE
-               MOVE OPERAND-A TO RESULT-VAL
-               DIVIDE OPERAND-B INTO RESULT-VAL
-               MOVE "Divided" TO STATUS-MSG
-           END-IF.
+           SET IS-DIVIDING TO TRUE.
+           PERFORM DO-OPERATION.
+
+       DO-OPERATION.
+           EVALUATE OPERATION
+               WHEN "ADD"
+                   MOVE OPERAND-A TO RESULT-VAL
+                   ADD OPERAND-B TO RESULT-VAL
+                   MOVE "Added" TO STATUS-MSG
+               WHEN "SUB"
+                   MOVE OPERAND-A TO RESULT-VAL
+                   SUBTRACT OPERAND-B FROM RESULT-VAL
+                   MOVE "Subtracted" TO STATUS-MSG
+               WHEN "MUL"
+                   MOVE OPERAND-A TO RESULT-VAL
+                   MULTIPLY OPERAND-B BY RESULT-VAL
+                   MOVE "Multiplied" TO STATUS-MSG
+               WHEN "DIV"
+                   IF OPERAND-B = 0
+                       MOVE "Cannot divide by zero!" TO STATUS-MSG
+                   ELSE
+                       MOVE OPERAND-A TO RESULT-VAL
+                       DIVIDE OPERAND-B INTO RESULT-VAL
+                       MOVE "Divided" TO STATUS-MSG
+                   END-IF
+               WHEN OTHER
+                   MOVE "Unknown operation" TO STATUS-MSG
+           END-EVALUATE.
+
+       HANDLE-COMPUTE.
+           COMPUTE RESULT-VAL = OPERAND-A + OPERAND-B * 2.
+           MOVE "Computed expression" TO STATUS-MSG.
+
+       HANDLE-MPLUS.
+           ADD RESULT-VAL TO MEMORY-VAL.
+           MOVE "Memory added" TO STATUS-MSG.
+
+       HANDLE-MMINUS.
+           SUBTRACT RESULT-VAL FROM MEMORY-VAL.
+           MOVE "Memory subtracted" TO STATUS-MSG.
+
+       HANDLE-MR.
+           MOVE MEMORY-VAL TO RESULT-VAL.
+           MOVE "Memory recalled" TO STATUS-MSG.
+
+       HANDLE-MC.
+           MOVE 0 TO MEMORY-VAL.
+           MOVE "Memory cleared" TO STATUS-MSG.
 
        HANDLE-CHECK.
-           IF RESULT-VAL > 1000
-               MOVE "Result is large!" TO STATUS-MSG
-           ELSE
-               IF RESULT-VAL = 0
+           EVALUATE RESULT-VAL
+               WHEN 0
                    MOVE "Result is zero" TO STATUS-MSG
-               ELSE
-                   MOVE "Result is modest" TO STATUS-MSG
-               END-IF
-           END-IF.
+               WHEN OTHER
+                   IF RESULT-VAL > 1000
+                       MOVE "Result is large!" TO STATUS-MSG
+                   ELSE
+                       MOVE "Result is modest" TO STATUS-MSG
+                   END-IF
+           END-EVALUATE.
