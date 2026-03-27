@@ -141,8 +141,70 @@ pub enum Statement {
         sources: Vec<(Expr, Expr)>,
         into: String,
     },
+    /// EVALUATE subject WHEN value ... WHEN OTHER ... END-EVALUATE
+    Evaluate {
+        subject: Expr,
+        whens: Vec<WhenClause>,
+        other: Vec<Statement>,
+    },
+    /// PERFORM paragraph UNTIL condition
+    PerformUntil {
+        paragraph: String,
+        condition: Condition,
+    },
+    /// COMPUTE target = arithmetic-expression
+    Compute {
+        target: String,
+        expression: ArithExpr,
+    },
+    /// ACCEPT target FROM source
+    Accept {
+        target: String,
+        source: AcceptSource,
+    },
+    /// SET condition-name TO TRUE/FALSE
+    Set {
+        condition: String,
+        value: bool,
+    },
     /// STOP RUN
     StopRun,
+}
+
+/// A WHEN clause inside an EVALUATE statement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhenClause {
+    pub value: Expr,
+    pub body: Vec<Statement>,
+}
+
+/// Arithmetic expression tree for COMPUTE statements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ArithExpr {
+    Num(f64),
+    Var(String),
+    BinOp {
+        left: Box<ArithExpr>,
+        op: ArithOp,
+        right: Box<ArithExpr>,
+    },
+}
+
+/// Arithmetic operators for COMPUTE expressions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ArithOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+}
+
+/// Source for ACCEPT statement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AcceptSource {
+    Date,
+    Time,
+    DayOfWeek,
 }
 
 /// An expression (literal or variable reference).

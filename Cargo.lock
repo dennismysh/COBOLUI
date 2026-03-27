@@ -148,7 +148,6 @@ dependencies = [
  "clap",
  "cobalt-ir",
  "cobalt-parser",
- "cobalt-render",
  "cobalt-term",
  "serde_json",
 ]
@@ -172,21 +171,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "cobalt-render"
-version = "0.1.0"
-dependencies = [
- "cobalt-ir",
- "thiserror",
-]
-
-[[package]]
 name = "cobalt-term"
 version = "0.1.0"
 dependencies = [
  "cobalt-ir",
- "cobalt-render",
  "crossterm",
  "ratatui",
+ "thiserror",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 // COBALT COBOL Subset Grammar
 // Parses DATA DIVISION (WORKING-STORAGE + SCREEN SECTION) and
-// minimal PROCEDURE DIVISION for event handler references.
+// PROCEDURE DIVISION for event handler references.
 
 WHITESPACE = _{ " " | "\t" }
 COMMENT    = _{ ("*>" ~ (!NEWLINE ~ ANY)*) }
@@ -78,6 +78,7 @@ subtract_stmt = { "SUBTRACT" ~ expr ~ "FROM" ~ ident ~ dot? }
 multiply_stmt = { "MULTIPLY" ~ expr ~ "BY" ~ ident ~ dot? }
 divide_stmt   = { "DIVIDE" ~ expr ~ "INTO" ~ ident ~ dot? }
 display_stmt  = { "DISPLAY" ~ expr+ ~ dot? }
+perform_until_stmt = { "PERFORM" ~ ident ~ "UNTIL" ~ condition ~ dot? }
 perform_stmt  = { "PERFORM" ~ ident ~ dot? }
 stop_stmt     = { "STOP" ~ "RUN" ~ dot? }
 
@@ -94,8 +95,29 @@ string_delim  = { "SIZE" | "SPACE" | "SPACES" | quoted_string }
 string_source = { expr ~ "DELIMITED" ~ "BY" ~ string_delim }
 string_stmt   = { "STRING" ~ (string_source ~ line_ending?)+ ~ "INTO" ~ ident ~ dot }
 
+// EVALUATE statement (COBOL switch/case)
+when_other    = { "WHEN" ~ "OTHER" ~ line_ending? ~ statement* }
+when_clause   = { "WHEN" ~ !("OTHER") ~ expr ~ line_ending? ~ statement* }
+evaluate_stmt = { "EVALUATE" ~ expr ~ line_ending? ~ (when_other | when_clause)+ ~ line_ending? ~ "END-EVALUATE" ~ dot? }
+
+// COMPUTE statement (arithmetic expressions)
+arith_add_op  = { "+" | "-" }
+arith_mul_op  = { "*" | "/" }
+arith_primary = { "(" ~ arith_expr ~ ")" | digits | ident }
+arith_mul     = { arith_primary ~ (arith_mul_op ~ arith_primary)* }
+arith_expr    = { arith_mul ~ (arith_add_op ~ arith_mul)* }
+compute_stmt  = { "COMPUTE" ~ ident ~ "=" ~ arith_expr ~ dot? }
+
+// ACCEPT statement (date/time)
+accept_source = { "DATE" | "TIME" | "DAY-OF-WEEK" }
+accept_stmt   = { "ACCEPT" ~ ident ~ "FROM" ~ accept_source ~ dot? }
+
+// SET statement (level-88 condition toggling)
+set_bool      = { "TRUE" | "FALSE" }
+set_stmt      = { "SET" ~ ident ~ "TO" ~ set_bool ~ dot? }
+
 // Any statement
-statement = { (move_stmt | add_stmt | subtract_stmt | multiply_stmt | divide_stmt | display_stmt | perform_stmt | stop_stmt | if_stmt | string_stmt) ~ line_ending? }
+statement = { (move_stmt | add_stmt | subtract_stmt | multiply_stmt | divide_stmt | display_stmt | perform_until_stmt | perform_stmt | stop_stmt | if_stmt | string_stmt | evaluate_stmt | compute_stmt | accept_stmt | set_stmt) ~ line_ending? }
 
 // PROCEDURE DIVISION
 procedure_division_header = { "PROCEDURE" ~ "DIVISION" ~ dot }
